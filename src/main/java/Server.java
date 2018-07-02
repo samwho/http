@@ -6,12 +6,19 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.*;
 
 public final class Server {
+    private final static int NUM_THREADS = 2;
+    private final static int QUEUE_SIZE = 32;
+
     private final int port;
     private final int socketQueueLength;
     private final RequestHandler requestHandler;
     private final Iterable<RequestListener> requestListeners;
+    private final ExecutorService executorService = Executors.newFixedThreadPool(NUM_THREADS);
+    private final BlockingQueue<Socket> queue = new ArrayBlockingQueue<>(QUEUE_SIZE);
+    private final List<Future<?>> threads = new ArrayList<>(NUM_THREADS);
 
     private Server(int port, int socketQueueLength, RequestHandler requestHandler, Iterable<RequestListener> requestListeners) {
         this.port = port;
@@ -24,24 +31,33 @@ public final class Server {
         byte[] addr = {0, 0, 0, 0};
         ServerSocket server = new ServerSocket(port, socketQueueLength, InetAddress.getByAddress(addr));
 
-        while (true) {
-            try (Socket client = server.accept()) {
-                Response res;
+        for (int i = 0; i < NUM_THREADS; i++) {
+            threads.add(executorService.submit(() -> {
 
-                try {
-                    Request req = Request.parse(client.getInputStream());
-                    requestListeners.forEach(listener -> listener.onRequest(req));
-                    res = requestHandler.handle(req);
-                } catch (RequestHandlerException e) {
-                    res = e.toResponse();
-                } catch (RequestParseException e) {
-                    res = Response.builder()
-                            .withStatus(Status.BAD_REQUEST)
-                            .build();
+                while (true) {
+                    try (Socket client = queue.take()) {
+                        Response res;
+
+                        try {
+                            Request req = Request.parse(client.getInputStream());
+                            requestListeners.forEach(listener -> listener.onRequest(req));
+                            res = requestHandler.handle(req);
+                        } catch (RequestHandlerException e) {
+                            res = e.toResponse();
+                        } catch (RequestParseException e) {
+                            res = Response.builder()
+                                    .withStatus(Status.BAD_REQUEST)
+                                    .build();
+                        }
+
+                        res.writeTo(client.getOutputStream());
+                    }
                 }
+            }));
+        }
 
-                res.writeTo(client.getOutputStream());
-            }
+        while (true) {
+            queue.add(server.accept());
         }
     }
 

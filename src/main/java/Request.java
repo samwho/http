@@ -1,5 +1,6 @@
 import com.google.common.base.*;
 import com.google.common.collect.ArrayListMultimap;
+import javafx.beans.binding.IntegerBinding;
 import org.apache.commons.lang.builder.EqualsBuilder;
 
 import java.io.*;
@@ -116,28 +117,25 @@ public final class Request {
             }
         }
 
-        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-        while(true) {
-            byte[] b = new byte[512];
-            int bytesRead = is.read(b);
+        String body = null;
+        List<String> contentLengthHeaders = headers.get("Content-Length");
+        if (!contentLengthHeaders.isEmpty()) {
+            int contentLength = Integer.valueOf(contentLengthHeaders.get(0));
 
-            if (bytesRead > 0) {
-                buffer.write(b, 0, bytesRead);
+            byte[] buffer = new byte[contentLength];
+            int bytesRead = is.read(buffer);
+            if (bytesRead != contentLength) {
+                // do something drastic
             }
 
-            if (bytesRead != 512) {
-                break;
-            }
+            CharsetDecoder decoder = Charset.forName(encoding).newDecoder();
+            decoder.onMalformedInput(CodingErrorAction.REPORT);
+            decoder.onUnmappableCharacter(CodingErrorAction.REPORT);
+
+            body = decoder.decode(ByteBuffer.wrap(buffer)).toString();
         }
 
-        CharsetDecoder decoder = Charset.forName(encoding).newDecoder();
-        decoder.onMalformedInput(CodingErrorAction.REPORT);
-        decoder.onUnmappableCharacter(CodingErrorAction.REPORT);
-
-        // This causes problems with comparison because the underlying buffer is larger than it needs to be. Fix pls.
-        CharBuffer decodedBody = decoder.decode(ByteBuffer.wrap(buffer.toByteArray()));
-
-        return new Request(method, requestUri, httpVersion, headers, queryParams, decodedBody.toString());
+        return new Request(method, requestUri, httpVersion, headers, queryParams, body);
     }
 
     private static byte[] readLine(InputStream is) throws IOException {
@@ -208,7 +206,7 @@ public final class Request {
         private String httpVersion = "HTTP/1.1";
         private ArrayListMultimap<String, String> headers = ArrayListMultimap.create();
         private ArrayListMultimap<String, String> queryParams = ArrayListMultimap.create();
-        private String body = "";
+        private String body = null;
 
         public Builder withMethod(String method) {
             this.method = method;

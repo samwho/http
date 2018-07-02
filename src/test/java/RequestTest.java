@@ -28,7 +28,7 @@ class RequestTest {
     @Test
     public void validPostRequestWithBody() throws Exception {
         // TODO: something something content-length header required?
-        String requestStr = "POST / HTTP/1.1\r\n\r\nHello, world!";
+        String requestStr = "POST / HTTP/1.1\r\nContent-Length: 13\r\n\r\nHello, world!";
         InputStream input = new ByteArrayInputStream(requestStr.getBytes());
 
         Request result = Request.parse(input);
@@ -37,6 +37,7 @@ class RequestTest {
                 .withBody("Hello, world!")
                 .withRequestUri("/")
                 .withHttpVersion("HTTP/1.1")
+                .addHeader("Content-Length", "13")
                 .build();
 
         assertThat(result).isEqualTo(expected);
@@ -61,7 +62,7 @@ class RequestTest {
 
     @Test
     public void requestBodyWrongEncoding() throws Exception {
-        byte[] requestTop = "POST / HTTP/1.1\r\nContent-Encoding: UTF-8\r\n\r\n".getBytes(Charsets.UTF_8);
+        byte[] requestTop = "POST / HTTP/1.1\r\nContent-Length: 26\r\nContent-Encoding: UTF-8\r\n\r\n".getBytes(Charsets.UTF_8);
         byte[] requestBottom = "Hello, world!".getBytes(Charsets.UTF_16);
         ByteArrayOutputStream os = new ByteArrayOutputStream();
         os.write(requestTop);
