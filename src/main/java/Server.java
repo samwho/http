@@ -17,23 +17,24 @@ public final class Server {
     private final RequestHandler requestHandler;
     private final Iterable<RequestListener> requestListeners;
     private final ExecutorService executorService = Executors.newFixedThreadPool(NUM_THREADS);
-    private final BlockingQueue<Socket> queue = new ArrayBlockingQueue<>(QUEUE_SIZE);
-    private final List<Future<?>> threads = new ArrayList<>(NUM_THREADS);
+    private final int numThreads;
+    private final BlockingQueue<Socket> queue;
 
-    private Server(int port, int socketQueueLength, RequestHandler requestHandler, Iterable<RequestListener> requestListeners) {
+    private Server(int port, int socketQueueLength, RequestHandler requestHandler, Iterable<RequestListener> requestListeners, int numThreads, int queueSize) {
         this.port = port;
         this.socketQueueLength = socketQueueLength;
         this.requestHandler = requestHandler;
         this.requestListeners = requestListeners;
+        this.numThreads = numThreads;
+        this.queue = new ArrayBlockingQueue<>(queueSize);
     }
 
     public void start() throws IOException {
         byte[] addr = {0, 0, 0, 0};
         ServerSocket server = new ServerSocket(port, socketQueueLength, InetAddress.getByAddress(addr));
 
-        for (int i = 0; i < NUM_THREADS; i++) {
-            threads.add(executorService.submit(() -> {
-
+        for (int i = 0; i < numThreads; i++) {
+            executorService.submit(() -> {
                 while (true) {
                     try (Socket client = queue.take()) {
                         Response res;
@@ -53,7 +54,7 @@ public final class Server {
                         res.writeTo(client.getOutputStream());
                     }
                 }
-            }));
+            });
         }
 
         while (true) {
@@ -70,6 +71,8 @@ public final class Server {
         private int socketQueueLength = 10;
         private RequestHandler requestHandler;
         private List<RequestListener> requestListeners = new ArrayList<>();
+        private int numThreads = 1;
+        private int queueSize = 1;
 
         public Builder withPort(int port) {
             this.port = port;
@@ -91,10 +94,20 @@ public final class Server {
             return this;
         }
 
+        public Builder withNumThreads(int numThreads) {
+            this.numThreads = numThreads;
+            return this;
+        }
+
+        public Builder withQueueSize(int queueSize) {
+            this.queueSize = queueSize;
+            return this;
+        }
+
         public Server build() {
             Preconditions.checkNotNull(requestHandler);
 
-            return new Server(port, socketQueueLength, requestHandler, requestListeners);
+            return new Server(port, socketQueueLength, requestHandler, requestListeners, numThreads, queueSize);
         }
     }
 
