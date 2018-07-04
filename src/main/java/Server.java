@@ -35,7 +35,10 @@ public final class Server {
     public void start() throws IOException {
         byte[] addr = {0, 0, 0, 0};
         ServerSocket server = new ServerSocket(port, socketQueueLength, InetAddress.getByAddress(addr));
-        logger.atInfo().log("server connected on port %d", port);
+        logger.atInfo().log("server connected on port %d", server.getLocalPort());
+        for (ServerListener listener : serverListeners) {
+            listener.onServerConnect(server);
+        }
 
         for (int i = 0; i < numThreads; i++) {
             executorService.submit(() -> {
@@ -61,7 +64,6 @@ public final class Server {
             });
         }
 
-        serverListeners.forEach(ServerListener::onStart);
         while (true) {
             Socket client = server.accept();
             logger.atInfo().log("accepted connection from client %s", client);
@@ -74,7 +76,7 @@ public final class Server {
     }
 
     public static final class Builder {
-        private int port = 8080;
+        private int port = 0;
         private int socketQueueLength = 10;
         private RequestHandler requestHandler;
         private List<RequestListener> requestListeners = new ArrayList<>();

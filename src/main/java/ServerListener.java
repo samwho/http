@@ -1,3 +1,6 @@
+import java.io.IOException;
+import java.net.ServerSocket;
+
 public interface ServerListener {
-    void onStart();
+    void onServerConnect(ServerSocket socket) throws IOException;
 }
