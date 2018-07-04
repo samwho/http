@@ -9,8 +9,6 @@ import java.util.List;
 import java.util.concurrent.*;
 
 public final class Server {
-    private final static int NUM_THREADS = 2;
-
     private final int port;
     private final int socketQueueLength;
     private final RequestHandler requestHandler;
