@@ -1,4 +1,5 @@
 import com.google.common.base.Preconditions;
+import com.google.common.flogger.FluentLogger;
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -9,19 +10,23 @@ import java.util.List;
 import java.util.concurrent.*;
 
 public final class Server {
+    private static final FluentLogger logger = FluentLogger.forEnclosingClass();
+
     private final int port;
     private final int socketQueueLength;
     private final RequestHandler requestHandler;
     private final Iterable<RequestListener> requestListeners;
+    private final Iterable<ServerListener> serverListeners;
     private final ExecutorService executorService;
     private final int numThreads;
     private final BlockingQueue<Socket> queue;
 
-    private Server(int port, int socketQueueLength, RequestHandler requestHandler, Iterable<RequestListener> requestListeners, int numThreads, int queueSize) {
+    private Server(int port, int socketQueueLength, RequestHandler requestHandler, Iterable<RequestListener> requestListeners, Iterable<ServerListener> serverListeners, int numThreads, int queueSize) {
         this.port = port;
         this.socketQueueLength = socketQueueLength;
         this.requestHandler = requestHandler;
         this.requestListeners = requestListeners;
+        this.serverListeners = serverListeners;
         this.executorService = Executors.newFixedThreadPool(numThreads);
         this.numThreads = numThreads;
         this.queue = new ArrayBlockingQueue<>(queueSize);
@@ -30,6 +35,7 @@ public final class Server {
     public void start() throws IOException {
         byte[] addr = {0, 0, 0, 0};
         ServerSocket server = new ServerSocket(port, socketQueueLength, InetAddress.getByAddress(addr));
+        logger.atInfo().log("server connected on port %d", port);
 
         for (int i = 0; i < numThreads; i++) {
             executorService.submit(() -> {
@@ -55,8 +61,11 @@ public final class Server {
             });
         }
 
+        serverListeners.forEach(ServerListener::onStart);
         while (true) {
-            queue.add(server.accept());
+            Socket client = server.accept();
+            logger.atInfo().log("accepted connection from client %s", client);
+            queue.add(client);
         }
     }
 
@@ -69,6 +78,7 @@ public final class Server {
         private int socketQueueLength = 10;
         private RequestHandler requestHandler;
         private List<RequestListener> requestListeners = new ArrayList<>();
+        private List<ServerListener> serverListeners = new ArrayList<>();
         private int numThreads = 1;
         private int queueSize = 1;
 
@@ -92,6 +102,11 @@ public final class Server {
             return this;
         }
 
+        public Builder addServerListener(ServerListener serverListener) {
+            this.serverListeners.add(serverListener);
+            return this;
+        }
+
         public Builder withNumThreads(int numThreads) {
             this.numThreads = numThreads;
             return this;
@@ -105,7 +120,7 @@ public final class Server {
         public Server build() {
             Preconditions.checkNotNull(requestHandler);
 
-            return new Server(port, socketQueueLength, requestHandler, requestListeners, numThreads, queueSize);
+            return new Server(port, socketQueueLength, requestHandler, requestListeners, serverListeners, numThreads, queueSize);
         }
     }
 
