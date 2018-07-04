@@ -10,13 +10,12 @@ import java.util.concurrent.*;
 
 public final class Server {
     private final static int NUM_THREADS = 2;
-    private final static int QUEUE_SIZE = 32;
 
     private final int port;
     private final int socketQueueLength;
     private final RequestHandler requestHandler;
     private final Iterable<RequestListener> requestListeners;
-    private final ExecutorService executorService = Executors.newFixedThreadPool(NUM_THREADS);
+    private final ExecutorService executorService;
     private final int numThreads;
     private final BlockingQueue<Socket> queue;
 
@@ -25,6 +24,7 @@ public final class Server {
         this.socketQueueLength = socketQueueLength;
         this.requestHandler = requestHandler;
         this.requestListeners = requestListeners;
+        this.executorService = Executors.newFixedThreadPool(numThreads);
         this.numThreads = numThreads;
         this.queue = new ArrayBlockingQueue<>(queueSize);
     }
